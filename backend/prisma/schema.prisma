@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Empresa atendida pelo assistente. Trocar de cliente = criar um registro aqui.
+model Company {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  name          String
+  persona       String
+  primaryColor  String         @default("#0f172a")
+  createdAt     DateTime       @default(now())
+  documents     Document[]
+  conversations Conversation[]
+}
+
+/// Arquivo (PDF ou Markdown) que alimenta a base de conhecimento. Sprint 2.
+model Document {
+  id        String   @id @default(cuid())
+  companyId String
+  filename  String
+  mimeType  String
+  status    String   @default("pending") // pending | processing | ready | error
+  createdAt DateTime @default(now())
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  chunks    Chunk[]
+}
+
+/// Trecho vetorizado de um documento. Sprint 2.
+model Chunk {
+  id         String   @id @default(cuid())
+  documentId String
+  companyId  String
+  content    String
+  position   Int
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  companyId String
+  createdAt DateTime  @default(now())
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           String // user | assistant
+  content        String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
