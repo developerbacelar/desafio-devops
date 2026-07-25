@@ -1,0 +1,61 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  qualidade:
+    name: Testes e cobertura
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Gerar Prisma Client
+        run: npx prisma generate
+
+      - name: Compilar TypeScript
+        run: npm run build
+
+      - name: Rodar testes com cobertura
+        run: npm run test:coverage
+
+      - name: Publicar relatorio de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-cobertura
+          path: backend/coverage/
+
+  docker:
+    name: Build da imagem Docker
+    runs-on: ubuntu-latest
+    needs: qualidade
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t desafio-ia-backend ./backend
+
+  deploy:
+    name: Deploy em producao
+    runs-on: ubuntu-latest
+    needs: [qualidade, docker]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Disparar deploy no Render
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
