@@ -27,7 +27,7 @@ describe("env", () => {
     const { env } = await import("../src/lib/env.js");
 
     expect(env.geminiApiKey).toBe("");
-    expect(env.geminiModel).toBe("gemini-2.5-flash");
+    expect(env.geminiModel).toBe("gemini-3.5-flash");
     expect(env.port).toBe(3333);
     expect(env.databaseUrl).toBe("");
     expect(env.isTest).toBe(false);

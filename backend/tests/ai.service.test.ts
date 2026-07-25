@@ -44,7 +44,7 @@ describe("ai.service", () => {
       contents: "oi",
       config: {
         systemInstruction: "sys",
-        temperature: 0.4,
+        temperature: 0.3,
         maxOutputTokens: 1024,
       },
     });
