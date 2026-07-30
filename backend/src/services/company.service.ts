@@ -1,4 +1,8 @@
+import { getPrisma } from "../lib/prisma.js";
+import { env } from "../lib/env.js";
+
 export interface Company {
+  id: string;
   slug: string;
   name: string;
   persona: string;
@@ -6,11 +10,12 @@ export interface Company {
 }
 
 /**
- * Empresas usadas quando o banco ainda nao esta configurado.
- * A partir do Sprint 2 a fonte oficial passa a ser a tabela Company.
+ * Empresas usadas quando DATABASE_URL nao esta configurada.
+ * Com DATABASE_URL setada, listCompanies/findCompanyBySlug leem do Prisma.
  */
 export const FALLBACK_COMPANIES: Company[] = [
   {
+    id: "puc-pr",
     slug: "puc-pr",
     name: "Puc PR",
     primaryColor: "#0d9488",
@@ -20,6 +25,7 @@ export const FALLBACK_COMPANIES: Company[] = [
       "ou validação de matérias: oriente o estudante a abrir um protocolo oficial.",
   },
   {
+    id: "technova",
     slug: "technova",
     name: "TechNova Eletronicos",
     primaryColor: "#2563eb",
@@ -29,6 +35,7 @@ export const FALLBACK_COMPANIES: Company[] = [
       "3 paragrafos. Trate o cliente por voce.",
   },
   {
+    id: "clinica-sorriso",
     slug: "clinica-sorriso",
     name: "Clinica Sorriso",
     primaryColor: "#0d9488",
@@ -39,11 +46,39 @@ export const FALLBACK_COMPANIES: Company[] = [
   },
 ];
 
-export function listCompanies(): Company[] {
-  return FALLBACK_COMPANIES;
+interface CompanyRecord {
+  id: string;
+  slug: string;
+  name: string;
+  persona: string;
+  primaryColor: string;
 }
 
-export function findCompanyBySlug(slug: string): Company | null {
+function toCompany(record: CompanyRecord): Company {
+  return {
+    id: record.id,
+    slug: record.slug,
+    name: record.name,
+    persona: record.persona,
+    primaryColor: record.primaryColor,
+  };
+}
+
+export async function listCompanies(): Promise<Company[]> {
+  if (!env.databaseUrl) {
+    return FALLBACK_COMPANIES;
+  }
+  const companies = await getPrisma().company.findMany();
+  return companies.map(toCompany);
+}
+
+export async function findCompanyBySlug(slug: string): Promise<Company | null> {
   const normalized = slug.trim().toLowerCase();
-  return FALLBACK_COMPANIES.find((c) => c.slug === normalized) ?? null;
+
+  if (!env.databaseUrl) {
+    return FALLBACK_COMPANIES.find((c) => c.slug === normalized) ?? null;
+  }
+
+  const company = await getPrisma().company.findUnique({ where: { slug: normalized } });
+  return company ? toCompany(company) : null;
 }

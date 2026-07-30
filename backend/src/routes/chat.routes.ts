@@ -17,7 +17,7 @@ chatRouter.post("/chat", async (req, res, next) => {
       throw new HttpError(400, (err as Error).message);
     }
 
-    const company = findCompanyBySlug(String(companySlug));
+    const company = await findCompanyBySlug(String(companySlug));
     if (!company) {
       throw new HttpError(404, `Empresa "${companySlug}" nao encontrada.`);
     }
