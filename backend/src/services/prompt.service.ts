@@ -33,7 +33,7 @@ export function buildGuardrails(company: Company): string {
 
     `Quando nao houver informacao suficiente para responder, ou fora dos casos acima, ofereca transferir a conversa para um atendente humano.`,
 
-    `Tom: profissional, acolhedor, direto, em portugues do Brasil. Frases curtas. Nunca invente precos, prazos, enderecos ou politicas da empresa.`,
+    `Tom: profissional, acolhedor, direto, em portugues do Brasil. Frases curtas. Nunca invente precos, prazos, enderecos ou politicas da empresa. Cumprimente (\"ola\", \"oi\", etc.) apenas na primeira mensagem da conversa — se ja houver mensagens anteriores nesta mesma conversa, va direto ao ponto na resposta, sem repetir saudacao.`,
   ];
 
   return sections.join("\n\n");
@@ -90,4 +90,45 @@ export function sanitizeQuestion(input: unknown): string {
     throw new Error("A pergunta excede o limite de 2000 caracteres.");
   }
   return question;
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+const MAX_HISTORY_TURNS = 30;
+const MAX_TURN_LENGTH = 2000;
+
+/** Normaliza e valida o historico de mensagens anteriores da conversa. */
+export function sanitizeHistory(input: unknown): ChatTurn[] {
+  if (input === undefined) {
+    return [];
+  }
+  if (!Array.isArray(input)) {
+    throw new Error("O historico deve ser uma lista.");
+  }
+  if (input.length > MAX_HISTORY_TURNS) {
+    throw new Error(`O historico excede o limite de ${MAX_HISTORY_TURNS} mensagens.`);
+  }
+  return input.map((item) => {
+    if (typeof item !== "object" || item === null) {
+      throw new Error("Cada item do historico deve ser um objeto com role e content.");
+    }
+    const { role, content } = item as Record<string, unknown>;
+    if (role !== "user" && role !== "assistant") {
+      throw new Error('O role do historico deve ser "user" ou "assistant".');
+    }
+    if (typeof content !== "string") {
+      throw new Error("O conteudo do historico deve ser um texto.");
+    }
+    const trimmed = content.replace(/\s+/g, " ").trim();
+    if (trimmed.length === 0) {
+      throw new Error("O conteudo do historico nao pode estar vazio.");
+    }
+    if (trimmed.length > MAX_TURN_LENGTH) {
+      throw new Error(`Uma mensagem do historico excede o limite de ${MAX_TURN_LENGTH} caracteres.`);
+    }
+    return { role, content: trimmed };
+  });
 }

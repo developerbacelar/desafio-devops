@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGuardrails,
   buildSystemPrompt,
+  sanitizeHistory,
   sanitizeQuestion,
   type ContextChunk,
 } from "../src/services/prompt.service.js";
@@ -89,6 +90,11 @@ describe("buildGuardrails", () => {
     expect(text).toContain("SAMU");
     expect(text).toContain("192");
   });
+
+  it("instrui a nao repetir saudacao a cada turno da mesma conversa", () => {
+    const text = buildGuardrails(company);
+    expect(text).toMatch(/cumprimente.*apenas na primeira mensagem/i);
+  });
 });
 
 describe("sanitizeQuestion", () => {
@@ -107,5 +113,51 @@ describe("sanitizeQuestion", () => {
 
   it("rejeita pergunta acima de 2000 caracteres", () => {
     expect(() => sanitizeQuestion("a".repeat(2001))).toThrow(/limite/);
+  });
+});
+
+describe("sanitizeHistory", () => {
+  it("retorna lista vazia quando o historico nao e informado", () => {
+    expect(sanitizeHistory(undefined)).toEqual([]);
+  });
+
+  it("mantem role e content normalizados de cada turno", () => {
+    const history = sanitizeHistory([
+      { role: "user", content: "  Qual o prazo?  " },
+      { role: "assistant", content: "5 dias uteis." },
+    ]);
+    expect(history).toEqual([
+      { role: "user", content: "Qual o prazo?" },
+      { role: "assistant", content: "5 dias uteis." },
+    ]);
+  });
+
+  it("rejeita valor que nao e uma lista", () => {
+    expect(() => sanitizeHistory("nao e lista")).toThrow(/lista/);
+  });
+
+  it("rejeita historico com mais de 30 mensagens", () => {
+    const history = Array.from({ length: 31 }, () => ({ role: "user", content: "oi" }));
+    expect(() => sanitizeHistory(history)).toThrow(/limite/);
+  });
+
+  it("rejeita item que nao e um objeto", () => {
+    expect(() => sanitizeHistory(["oi"])).toThrow(/role e content/);
+  });
+
+  it("rejeita role invalido", () => {
+    expect(() => sanitizeHistory([{ role: "system", content: "oi" }])).toThrow(/role/);
+  });
+
+  it("rejeita content que nao e texto", () => {
+    expect(() => sanitizeHistory([{ role: "user", content: 42 }])).toThrow(/texto/);
+  });
+
+  it("rejeita content vazio", () => {
+    expect(() => sanitizeHistory([{ role: "user", content: "   " }])).toThrow(/vazio/);
+  });
+
+  it("rejeita content acima de 2000 caracteres", () => {
+    expect(() => sanitizeHistory([{ role: "user", content: "a".repeat(2001) }])).toThrow(/limite/);
   });
 });

@@ -1,0 +1,27 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# testing
+/coverage
+
+# build output do widget (gerado por `npm run build:widget`)
+/public/widget.js
+
+# misc
+.DS_Store
+*.pem
+
+# env
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

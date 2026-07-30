@@ -41,6 +41,11 @@ describe("company.service", () => {
       const { findCompanyBySlug } = await import("../src/services/company.service.js");
       expect(await findCompanyBySlug("empresa-fantasma")).toBeNull();
     });
+
+    it("logoUrl fica indefinido quando a empresa fallback ainda nao tem logo cadastrada", async () => {
+      const { findCompanyBySlug } = await import("../src/services/company.service.js");
+      expect((await findCompanyBySlug("technova"))?.logoUrl).toBeUndefined();
+    });
   });
 
   describe("com DATABASE_URL setada (banco via Prisma)", () => {
@@ -56,6 +61,7 @@ describe("company.service", () => {
           name: "Acme",
           persona: "Voce e o assistente da Acme.",
           primaryColor: "#000000",
+          logoUrl: null,
           createdAt: new Date(),
         },
       ]);
@@ -67,6 +73,25 @@ describe("company.service", () => {
         { id: "1", slug: "acme", name: "Acme", persona: "Voce e o assistente da Acme.", primaryColor: "#000000" },
       ]);
       expect(companyFindManyMock).toHaveBeenCalledOnce();
+    });
+
+    it("inclui logoUrl quando o banco tem o campo preenchido", async () => {
+      companyFindManyMock.mockResolvedValue([
+        {
+          id: "1",
+          slug: "acme",
+          name: "Acme",
+          persona: "Voce e o assistente da Acme.",
+          primaryColor: "#000000",
+          logoUrl: "/logos/acme.svg",
+          createdAt: new Date(),
+        },
+      ]);
+      const { listCompanies } = await import("../src/services/company.service.js");
+
+      const companies = await listCompanies();
+
+      expect(companies[0].logoUrl).toBe("/logos/acme.svg");
     });
 
     it("busca empresa pelo slug normalizado no banco", async () => {

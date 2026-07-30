@@ -21,4 +21,27 @@ describe("GET /api/companies", () => {
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("Erro interno do servidor.");
   });
+
+  it("inclui logoUrl na projecao publica quando a empresa tem uma cadastrada", async () => {
+    vi.mocked(listCompanies).mockResolvedValueOnce([
+      {
+        id: "1",
+        slug: "acme",
+        name: "Acme",
+        persona: "Voce e o assistente da Acme.",
+        primaryColor: "#000000",
+        logoUrl: "/logos/acme.svg",
+      },
+    ]);
+
+    const res = await request(app).get("/api/companies");
+
+    expect(res.status).toBe(200);
+    expect(res.body.companies[0]).toEqual({
+      slug: "acme",
+      name: "Acme",
+      primaryColor: "#000000",
+      logoUrl: "/logos/acme.svg",
+    });
+  });
 });

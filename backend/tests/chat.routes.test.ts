@@ -68,6 +68,53 @@ describe("POST /api/chat", () => {
     expect(res.status).toBe(500);
   });
 
+  it("encaminha o historico sanitizado para ask()", async () => {
+    const res = await request(app)
+      .post("/api/chat")
+      .send({
+        question: "E frete gratis?",
+        history: [
+          { role: "user", content: "  Qual o prazo?  " },
+          { role: "assistant", content: "5 dias uteis." },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        history: [
+          { role: "user", content: "Qual o prazo?" },
+          { role: "assistant", content: "5 dias uteis." },
+        ],
+      }),
+    );
+  });
+
+  it("usa historico vazio quando nao informado", async () => {
+    const res = await request(app).post("/api/chat").send({ question: "Ola" });
+
+    expect(res.status).toBe(200);
+    expect(ask).toHaveBeenCalledWith(expect.objectContaining({ history: [] }));
+  });
+
+  it("retorna 400 quando o historico nao e uma lista", async () => {
+    const res = await request(app)
+      .post("/api/chat")
+      .send({ question: "Ola", history: "nao e lista" });
+
+    expect(res.status).toBe(400);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("retorna 400 quando um item do historico tem role invalido", async () => {
+    const res = await request(app)
+      .post("/api/chat")
+      .send({ question: "Ola", history: [{ role: "system", content: "oi" }] });
+
+    expect(res.status).toBe(400);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
   it("trata corpo ausente como objeto vazio", async () => {
     const res = await request(app).post("/api/chat");
     expect(res.status).toBe(400);

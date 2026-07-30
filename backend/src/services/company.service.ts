@@ -7,6 +7,8 @@ export interface Company {
   name: string;
   persona: string;
   primaryColor: string;
+  /** URL do logo (SVG) da empresa. Ausente enquanto a empresa nao tiver um cadastrado. */
+  logoUrl?: string;
 }
 
 /**
@@ -52,6 +54,7 @@ interface CompanyRecord {
   name: string;
   persona: string;
   primaryColor: string;
+  logoUrl?: string | null;
 }
 
 function toCompany(record: CompanyRecord): Company {
@@ -61,6 +64,7 @@ function toCompany(record: CompanyRecord): Company {
     name: record.name,
     persona: record.persona,
     primaryColor: record.primaryColor,
+    logoUrl: record.logoUrl ?? undefined,
   };
 }
 

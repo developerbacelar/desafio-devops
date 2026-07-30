@@ -1,3 +1,4 @@
+import type { Content } from "@google/genai";
 import { GoogleGenAI } from "@google/genai";
 import { env } from "../lib/env.js";
 
@@ -11,15 +12,30 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface AskParams {
   systemPrompt: string;
   question: string;
+  history?: ChatTurn[];
 }
 
-export async function ask({ systemPrompt, question }: AskParams): Promise<string> {
+function toGeminiContents(history: ChatTurn[], question: string): Content[] {
+  const turns: Content[] = history.map((turn) => ({
+    role: turn.role === "assistant" ? "model" : "user",
+    parts: [{ text: turn.content }],
+  }));
+  turns.push({ role: "user", parts: [{ text: question }] });
+  return turns;
+}
+
+export async function ask({ systemPrompt, question, history = [] }: AskParams): Promise<string> {
   const response = await getClient().models.generateContent({
     model: env.geminiModel,
-    contents: question,
+    contents: toGeminiContents(history, question),
     config: {
       systemInstruction: systemPrompt,
       temperature: 0.3,

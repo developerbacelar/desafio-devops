@@ -41,7 +41,35 @@ describe("ai.service", () => {
     expect(GoogleGenAIMock).toHaveBeenCalledOnce();
     expect(generateContentMock).toHaveBeenCalledWith({
       model: "gemini-flash-latest",
-      contents: "oi",
+      contents: [{ role: "user", parts: [{ text: "oi" }] }],
+      config: {
+        systemInstruction: "sys",
+        temperature: 0.3,
+        maxOutputTokens: 1024,
+      },
+    });
+  });
+
+  it("monta contents multi-turno a partir do historico, mapeando assistant para model", async () => {
+    generateContentMock.mockResolvedValue({ text: "Resposta." });
+    const { ask } = await import("../src/services/ai.service.js");
+
+    await ask({
+      systemPrompt: "sys",
+      question: "e agora?",
+      history: [
+        { role: "user", content: "Qual o prazo?" },
+        { role: "assistant", content: "5 dias uteis." },
+      ],
+    });
+
+    expect(generateContentMock).toHaveBeenCalledWith({
+      model: "gemini-flash-latest",
+      contents: [
+        { role: "user", parts: [{ text: "Qual o prazo?" }] },
+        { role: "model", parts: [{ text: "5 dias uteis." }] },
+        { role: "user", parts: [{ text: "e agora?" }] },
+      ],
       config: {
         systemInstruction: "sys",
         temperature: 0.3,

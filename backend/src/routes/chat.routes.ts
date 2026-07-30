@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { findCompanyBySlug } from "../services/company.service.js";
-import { buildSystemPrompt, sanitizeQuestion } from "../services/prompt.service.js";
+import { buildSystemPrompt, sanitizeHistory, sanitizeQuestion } from "../services/prompt.service.js";
 import { ask } from "../services/ai.service.js";
 import { HttpError } from "../middlewares/error.middleware.js";
 
@@ -8,11 +8,18 @@ export const chatRouter = Router();
 
 chatRouter.post("/chat", async (req, res, next) => {
   try {
-    const { companySlug = "technova", question: rawQuestion } = req.body;
+    const { companySlug = "technova", question: rawQuestion, history: rawHistory } = req.body;
 
     let question: string;
     try {
       question = sanitizeQuestion(rawQuestion);
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
+
+    let history: ReturnType<typeof sanitizeHistory>;
+    try {
+      history = sanitizeHistory(rawHistory);
     } catch (err) {
       throw new HttpError(400, (err as Error).message);
     }
@@ -23,7 +30,7 @@ chatRouter.post("/chat", async (req, res, next) => {
     }
 
     const systemPrompt = buildSystemPrompt(company);
-    const answer = await ask({ systemPrompt, question });
+    const answer = await ask({ systemPrompt, question, history });
 
     res.json({
       company: company.slug,
