@@ -274,4 +274,16 @@ describe("/api/admin/companies", () => {
 
     expect(res.status).toBe(404);
   });
+
+  it("retorna 500 quando a exclusao falha por outro motivo", async () => {
+    companyDeleteMock.mockRejectedValue(new Error("falha inesperada"));
+    const { createApp } = await import("../src/app.js");
+    const app = createApp();
+
+    const res = await request(app)
+      .delete("/api/admin/companies/acme")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(500);
+  });
 });
