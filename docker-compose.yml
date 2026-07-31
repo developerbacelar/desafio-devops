@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chatbot
+      POSTGRES_PASSWORD: chatbot
+      POSTGRES_DB: chatbot
+    ports:
+      - "5432:5432"
+    volumes:
+      - chatbot_postgres_data:/var/lib/postgresql/data
+      - ./backend/docker/init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
+
+volumes:
+  chatbot_postgres_data:

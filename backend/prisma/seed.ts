@@ -1,4 +1,8 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
+import { ingestDocument } from "../src/services/ingest.service.js";
 
 const prisma = new PrismaClient();
 
@@ -44,6 +48,20 @@ async function main() {
         "oriente o paciente a agendar uma avaliacao presencial.",
     },
   });
+
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const seedDataDir = path.join(__dirname, "seed-data");
+  const companies = await prisma.company.findMany({ select: { id: true, slug: true } });
+
+  for (const company of companies) {
+    const filename = `${company.slug}.md`;
+    const filePath = path.join(seedDataDir, filename);
+    if (!existsSync(filePath)) continue;
+
+    const content = readFileSync(filePath, "utf-8");
+    await ingestDocument(company.id, filename, content);
+    console.log(`Contexto ingerido para ${company.slug} (${filename}).`);
+  }
 
   console.log("Seed concluido.");
 }

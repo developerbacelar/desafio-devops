@@ -2,6 +2,8 @@ import { Router } from "express";
 import { findCompanyBySlug } from "../services/company.service.js";
 import { buildSystemPrompt, sanitizeHistory, sanitizeQuestion } from "../services/prompt.service.js";
 import { ask } from "../services/ai.service.js";
+import { retrieveContext } from "../services/retrieval.service.js";
+import { env } from "../lib/env.js";
 import { HttpError } from "../middlewares/error.middleware.js";
 
 export const chatRouter = Router();
@@ -29,7 +31,8 @@ chatRouter.post("/chat", async (req, res, next) => {
       throw new HttpError(404, `Empresa "${companySlug}" nao encontrada.`);
     }
 
-    const systemPrompt = buildSystemPrompt(company);
+    const chunks = env.databaseUrl ? await retrieveContext(company.id, question) : [];
+    const systemPrompt = buildSystemPrompt(company, chunks);
     const answer = await ask({ systemPrompt, question, history });
 
     res.json({

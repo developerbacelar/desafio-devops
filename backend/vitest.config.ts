@@ -4,6 +4,12 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Garante testes hermeticos: o .env local pode ter uma DATABASE_URL real
+    // (para `npm run dev`/`npm run seed`), mas os testes que nao mockam
+    // lib/env.js explicitamente devem sempre ver o caminho sem banco.
+    env: {
+      DATABASE_URL: "",
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html"],
