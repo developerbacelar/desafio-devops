@@ -3,14 +3,14 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "noEmit": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "scripts/**/*", "prisma/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
 }
