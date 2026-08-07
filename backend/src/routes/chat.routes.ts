@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { findCompanyBySlug } from "../services/company.service.js";
+import { findCompanyForWidget } from "../services/company.service.js";
 import { buildSystemPrompt, sanitizeHistory, sanitizeQuestion } from "../services/prompt.service.js";
 import { ask } from "../services/ai.service.js";
 import { retrieveContext } from "../services/retrieval.service.js";
@@ -11,6 +11,14 @@ export const chatRouter = Router();
 chatRouter.post("/chat", async (req, res, next) => {
   try {
     const { companySlug = "technova", question: rawQuestion, history: rawHistory } = req.body;
+
+    // Chave invalida/ausente sempre responde 403, mesmo se o slug nao existir:
+    // nao da pra diferenciar "chave errada" de "empresa inexistente", senao
+    // um atacante consegue enumerar quais slugs sao validos por tentativa e erro.
+    const company = await findCompanyForWidget(String(companySlug), req.header("X-Widget-Key"));
+    if (!company) {
+      throw new HttpError(403, "Chave de API ausente ou invalida para esta empresa.");
+    }
 
     let question: string;
     try {
@@ -24,11 +32,6 @@ chatRouter.post("/chat", async (req, res, next) => {
       history = sanitizeHistory(rawHistory);
     } catch (err) {
       throw new HttpError(400, (err as Error).message);
-    }
-
-    const company = await findCompanyBySlug(String(companySlug));
-    if (!company) {
-      throw new HttpError(404, `Empresa "${companySlug}" nao encontrada.`);
     }
 
     const chunks = env.databaseUrl ? await retrieveContext(company.id, question) : [];

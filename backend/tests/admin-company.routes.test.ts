@@ -88,6 +88,7 @@ describe("/api/admin/companies", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.company.slug).toBe("nova");
+    expect(res.body.apiKey).toMatch(/^wk_/);
   });
 
   it("retorna 400 quando os dados de criacao sao invalidos", async () => {
@@ -285,5 +286,71 @@ describe("/api/admin/companies", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(500);
+  });
+
+  describe("POST /api/admin/companies/:slug/rotate-key", () => {
+    it("gera uma nova chave e devolve o par company+apiKey", async () => {
+      companyUpdateMock.mockResolvedValue({
+        id: "1",
+        slug: "acme",
+        name: "Acme",
+        persona: "p",
+        primaryColor: "#112233",
+        logoUrl: null,
+      });
+      const { createApp } = await import("../src/app.js");
+      const app = createApp();
+
+      const res = await request(app)
+        .post("/api/admin/companies/acme/rotate-key")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.company.slug).toBe("acme");
+      expect(res.body.apiKey).toMatch(/^wk_/);
+      expect(companyUpdateMock).toHaveBeenCalledWith({
+        where: { slug: "acme" },
+        data: { apiKeyHash: expect.any(String) },
+      });
+    });
+
+    it("retorna 404 ao rotacionar a chave de uma empresa inexistente", async () => {
+      const { Prisma } = await import("@prisma/client");
+      companyUpdateMock.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError("Record not found", {
+          code: "P2025",
+          clientVersion: "6.19.3",
+        }),
+      );
+      const { createApp } = await import("../src/app.js");
+      const app = createApp();
+
+      const res = await request(app)
+        .post("/api/admin/companies/fantasma/rotate-key")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it("retorna 401 sem token", async () => {
+      const { createApp } = await import("../src/app.js");
+      const app = createApp();
+
+      const res = await request(app).post("/api/admin/companies/acme/rotate-key");
+
+      expect(res.status).toBe(401);
+    });
+
+    it("retorna 500 quando a rotacao falha por outro motivo", async () => {
+      companyUpdateMock.mockRejectedValue(new Error("falha inesperada"));
+      const { createApp } = await import("../src/app.js");
+      const app = createApp();
+
+      const res = await request(app)
+        .post("/api/admin/companies/acme/rotate-key")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(500);
+    });
   });
 });

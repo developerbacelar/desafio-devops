@@ -5,6 +5,7 @@ import {
   deleteCompany,
   findCompanyBySlug,
   listCompanies,
+  rotateApiKey,
   updateCompany,
   validateCreateCompanyInput,
   validateUpdateCompanyInput,
@@ -33,8 +34,8 @@ adminCompanyRouter.post("/admin/companies", async (req, res, next) => {
       throw new HttpError(400, (err as Error).message);
     }
 
-    const company = await createCompany(input);
-    res.status(201).json({ company });
+    const { company, apiKey } = await createCompany(input);
+    res.status(201).json({ company, apiKey });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       next(new HttpError(409, "Slug ja esta em uso."));
@@ -72,6 +73,19 @@ adminCompanyRouter.put("/admin/companies/:slug", async (req, res, next) => {
       next(new HttpError(409, "Slug ja esta em uso."));
       return;
     }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      next(new HttpError(404, `Empresa "${req.params.slug}" nao encontrada.`));
+      return;
+    }
+    next(err);
+  }
+});
+
+adminCompanyRouter.post("/admin/companies/:slug/rotate-key", async (req, res, next) => {
+  try {
+    const { company, apiKey } = await rotateApiKey(req.params.slug);
+    res.json({ company, apiKey });
+  } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
       next(new HttpError(404, `Empresa "${req.params.slug}" nao encontrada.`));
       return;

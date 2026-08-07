@@ -1,3 +1,4 @@
+import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { getPrisma } from "../lib/prisma.js";
 import { env } from "../lib/env.js";
 
@@ -37,8 +38,8 @@ export const FALLBACK_COMPANIES: Company[] = [
     documentCount: 0,
     persona:
       "Voce e o assistente virtual da TechNova Eletronicos, uma loja de " +
-      "informatica e eletronicos. Seja cordial, objetivo e use no maximo " +
-      "3 paragrafos. Trate o cliente por voce.",
+      "informatica e eletronicos. Seja cordial e objetivo, respondendo de forma " +
+      "direta e sem enrolacao, mas cobrindo tudo que o cliente perguntou. Trate o cliente por voce.",
   },
   {
     id: "clinica-sorriso",
@@ -60,8 +61,40 @@ interface CompanyRecord {
   persona: string;
   primaryColor: string;
   logoUrl?: string | null;
+  apiKeyHash?: string | null;
   _count?: { documents: number };
 }
+
+const API_KEY_PREFIX = "wk_";
+
+/** Gera uma chave de API de alta entropia para um widget de empresa. */
+export function generateApiKey(): string {
+  return API_KEY_PREFIX + randomBytes(24).toString("base64url");
+}
+
+function hashApiKey(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+/**
+ * Confere se `providedKey` corresponde ao hash armazenado. Usa SHA-256 (nao
+ * bcrypt) porque a chave e um segredo de alta entropia gerado por nos, nao
+ * uma senha escolhida por humano — nao precisa de hash lento/adaptativo, e
+ * uma comparacao rapida e necessaria a cada requisicao de chat.
+ */
+export function verifyApiKey(hash: string | null | undefined, providedKey: string | undefined): boolean {
+  if (!hash || !providedKey) return false;
+  const expected = Buffer.from(hash, "hex");
+  const actual = Buffer.from(hashApiKey(providedKey), "hex");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+/**
+ * Chave fixa usada pelas FALLBACK_COMPANIES (modo sem DATABASE_URL, so local/demo).
+ * Nao e um segredo de producao: sem banco configurado ja e um ambiente de dev.
+ */
+export const FALLBACK_API_KEY = "wk_dev_local_fallback";
+const FALLBACK_API_KEY_HASH = hashApiKey(FALLBACK_API_KEY);
 
 function toCompany(record: CompanyRecord): Company {
   return {
@@ -94,6 +127,26 @@ export async function findCompanyBySlug(slug: string): Promise<Company | null> {
 
   const company = await getPrisma().company.findUnique({ where: { slug: normalized } });
   return company ? toCompany(company) : null;
+}
+
+/**
+ * Resolve uma empresa para uso pelo widget publico (chat, busca por slug):
+ * so retorna a empresa quando a chave de API bater com o hash armazenado.
+ * Usada no lugar de findCompanyBySlug em qualquer rota publica, pra nunca
+ * responder com dados de uma empresa sem a chave correta dela.
+ */
+export async function findCompanyForWidget(slug: string, providedKey: string | undefined): Promise<Company | null> {
+  const normalized = slug.trim().toLowerCase();
+
+  if (!env.databaseUrl) {
+    const company = FALLBACK_COMPANIES.find((c) => c.slug === normalized);
+    if (!company || !verifyApiKey(FALLBACK_API_KEY_HASH, providedKey)) return null;
+    return company;
+  }
+
+  const record = await getPrisma().company.findUnique({ where: { slug: normalized } });
+  if (!record || !verifyApiKey(record.apiKeyHash, providedKey)) return null;
+  return toCompany(record);
 }
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -193,7 +246,14 @@ export function validateUpdateCompanyInput(input: unknown): UpdateCompanyInput {
   return result;
 }
 
-export async function createCompany(input: CreateCompanyInput): Promise<Company> {
+export interface CreateCompanyResult {
+  company: Company;
+  /** Texto puro da chave gerada — so disponivel nesta resposta, nunca mais. */
+  apiKey: string;
+}
+
+export async function createCompany(input: CreateCompanyInput): Promise<CreateCompanyResult> {
+  const apiKey = generateApiKey();
   const record = await getPrisma().company.create({
     data: {
       slug: input.slug,
@@ -201,9 +261,10 @@ export async function createCompany(input: CreateCompanyInput): Promise<Company>
       persona: input.persona,
       primaryColor: input.primaryColor,
       logoUrl: input.logoUrl,
+      apiKeyHash: hashApiKey(apiKey),
     },
   });
-  return toCompany(record);
+  return { company: toCompany(record), apiKey };
 }
 
 export async function updateCompany(slug: string, input: UpdateCompanyInput): Promise<Company> {
@@ -211,6 +272,16 @@ export async function updateCompany(slug: string, input: UpdateCompanyInput): Pr
   const data = { ...rest, ...(logoUrl !== undefined ? { logoUrl: logoUrl || null } : {}) };
   const record = await getPrisma().company.update({ where: { slug }, data });
   return toCompany(record);
+}
+
+/** Gera uma nova chave pra empresa e invalida a antiga imediatamente. */
+export async function rotateApiKey(slug: string): Promise<CreateCompanyResult> {
+  const apiKey = generateApiKey();
+  const record = await getPrisma().company.update({
+    where: { slug },
+    data: { apiKeyHash: hashApiKey(apiKey) },
+  });
+  return { company: toCompany(record), apiKey };
 }
 
 export async function deleteCompany(slug: string): Promise<void> {

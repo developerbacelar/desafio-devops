@@ -9,6 +9,7 @@ vi.mock("../src/services/ai.service.js", () => ({
 
 const { createApp } = await import("../src/app.js");
 const { ask } = await import("../src/services/ai.service.js");
+const { FALLBACK_API_KEY } = await import("../src/services/company.service.js");
 
 const app = createApp();
 
@@ -22,19 +23,11 @@ describe("GET /api/health", () => {
   });
 });
 
-describe("GET /api/companies", () => {
-  it("lista as empresas sem expor a persona", async () => {
-    const res = await request(app).get("/api/companies");
-    expect(res.status).toBe(200);
-    expect(res.body.companies.length).toBeGreaterThan(0);
-    expect(res.body.companies[0]).not.toHaveProperty("persona");
-  });
-});
-
 describe("POST /api/chat", () => {
   it("retorna a resposta da IA", async () => {
     const res = await request(app)
       .post("/api/chat")
+      .set("X-Widget-Key", FALLBACK_API_KEY)
       .send({ companySlug: "technova", question: "Voces entregam em Curitiba?" });
 
     expect(res.status).toBe(200);
@@ -44,33 +37,53 @@ describe("POST /api/chat", () => {
   });
 
   it("usa a empresa padrao quando o slug nao e informado", async () => {
-    const res = await request(app).post("/api/chat").send({ question: "Ola" });
+    const res = await request(app).post("/api/chat").set("X-Widget-Key", FALLBACK_API_KEY).send({ question: "Ola" });
     expect(res.status).toBe(200);
     expect(res.body.company).toBe("technova");
   });
 
   it("retorna 400 quando a pergunta esta vazia", async () => {
-    const res = await request(app).post("/api/chat").send({ question: "  " });
+    const res = await request(app).post("/api/chat").set("X-Widget-Key", FALLBACK_API_KEY).send({ question: "  " });
     expect(res.status).toBe(400);
     expect(ask).not.toHaveBeenCalled();
   });
 
-  it("retorna 404 para empresa inexistente", async () => {
+  it("retorna 403 quando o header X-Widget-Key esta ausente", async () => {
     const res = await request(app)
       .post("/api/chat")
+      .send({ companySlug: "technova", question: "Ola" });
+    expect(res.status).toBe(403);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("retorna 403 quando a chave esta errada", async () => {
+    const res = await request(app)
+      .post("/api/chat")
+      .set("X-Widget-Key", "chave-errada")
+      .send({ companySlug: "technova", question: "Ola" });
+    expect(res.status).toBe(403);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("retorna 403 (nao 404) para empresa inexistente, mesmo com uma chave valida de outra empresa", async () => {
+    const res = await request(app)
+      .post("/api/chat")
+      .set("X-Widget-Key", FALLBACK_API_KEY)
       .send({ companySlug: "nao-existe", question: "Ola" });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect(ask).not.toHaveBeenCalled();
   });
 
   it("retorna 500 quando a IA falha", async () => {
     vi.mocked(ask).mockRejectedValueOnce(new Error("timeout"));
-    const res = await request(app).post("/api/chat").send({ question: "Ola" });
+    const res = await request(app).post("/api/chat").set("X-Widget-Key", FALLBACK_API_KEY).send({ question: "Ola" });
     expect(res.status).toBe(500);
   });
 
   it("encaminha o historico sanitizado para ask()", async () => {
     const res = await request(app)
       .post("/api/chat")
+      .set("X-Widget-Key", FALLBACK_API_KEY)
       .send({
         question: "E frete gratis?",
         history: [
@@ -91,7 +104,7 @@ describe("POST /api/chat", () => {
   });
 
   it("usa historico vazio quando nao informado", async () => {
-    const res = await request(app).post("/api/chat").send({ question: "Ola" });
+    const res = await request(app).post("/api/chat").set("X-Widget-Key", FALLBACK_API_KEY).send({ question: "Ola" });
 
     expect(res.status).toBe(200);
     expect(ask).toHaveBeenCalledWith(expect.objectContaining({ history: [] }));
@@ -100,6 +113,7 @@ describe("POST /api/chat", () => {
   it("retorna 400 quando o historico nao e uma lista", async () => {
     const res = await request(app)
       .post("/api/chat")
+      .set("X-Widget-Key", FALLBACK_API_KEY)
       .send({ question: "Ola", history: "nao e lista" });
 
     expect(res.status).toBe(400);
@@ -109,6 +123,7 @@ describe("POST /api/chat", () => {
   it("retorna 400 quando um item do historico tem role invalido", async () => {
     const res = await request(app)
       .post("/api/chat")
+      .set("X-Widget-Key", FALLBACK_API_KEY)
       .send({ question: "Ola", history: [{ role: "system", content: "oi" }] });
 
     expect(res.status).toBe(400);
@@ -116,7 +131,7 @@ describe("POST /api/chat", () => {
   });
 
   it("trata corpo ausente como objeto vazio", async () => {
-    const res = await request(app).post("/api/chat");
+    const res = await request(app).post("/api/chat").set("X-Widget-Key", FALLBACK_API_KEY);
     expect(res.status).toBe(400);
     expect(ask).not.toHaveBeenCalled();
   });

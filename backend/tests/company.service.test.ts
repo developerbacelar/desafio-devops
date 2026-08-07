@@ -64,6 +64,29 @@ describe("company.service", () => {
       const companies = await listCompanies();
       expect(companies.every((c) => c.documentCount === 0)).toBe(true);
     });
+
+    describe("findCompanyForWidget", () => {
+      it("retorna a empresa quando o slug existe e a chave de fallback bate", async () => {
+        const { findCompanyForWidget, FALLBACK_API_KEY } = await import("../src/services/company.service.js");
+        const company = await findCompanyForWidget("technova", FALLBACK_API_KEY);
+        expect(company?.slug).toBe("technova");
+      });
+
+      it("retorna null quando a chave esta errada", async () => {
+        const { findCompanyForWidget } = await import("../src/services/company.service.js");
+        expect(await findCompanyForWidget("technova", "chave-errada")).toBeNull();
+      });
+
+      it("retorna null quando a chave esta ausente", async () => {
+        const { findCompanyForWidget } = await import("../src/services/company.service.js");
+        expect(await findCompanyForWidget("technova", undefined)).toBeNull();
+      });
+
+      it("retorna null para slug inexistente mesmo com a chave de fallback certa", async () => {
+        const { findCompanyForWidget, FALLBACK_API_KEY } = await import("../src/services/company.service.js");
+        expect(await findCompanyForWidget("empresa-fantasma", FALLBACK_API_KEY)).toBeNull();
+      });
+    });
   });
 
   describe("com DATABASE_URL setada (banco via Prisma)", () => {
@@ -142,6 +165,72 @@ describe("company.service", () => {
       const { findCompanyBySlug } = await import("../src/services/company.service.js");
 
       expect(await findCompanyBySlug("nao-existe")).toBeNull();
+    });
+
+    describe("findCompanyForWidget", () => {
+      it("retorna a empresa quando a chave bate com o hash armazenado", async () => {
+        const { generateApiKey, findCompanyForWidget } = await import("../src/services/company.service.js");
+        const { createHash } = await import("node:crypto");
+        const apiKey = generateApiKey();
+        companyFindUniqueMock.mockResolvedValue({
+          id: "1",
+          slug: "acme",
+          name: "Acme",
+          persona: "p",
+          primaryColor: "#000000",
+          logoUrl: null,
+          apiKeyHash: createHash("sha256").update(apiKey).digest("hex"),
+        });
+
+        const company = await findCompanyForWidget("acme", apiKey);
+
+        expect(company?.slug).toBe("acme");
+      });
+
+      it("retorna null quando a chave nao bate com o hash armazenado", async () => {
+        companyFindUniqueMock.mockResolvedValue({
+          id: "1",
+          slug: "acme",
+          name: "Acme",
+          persona: "p",
+          primaryColor: "#000000",
+          logoUrl: null,
+          apiKeyHash: "hash-de-outra-chave",
+        });
+        const { findCompanyForWidget } = await import("../src/services/company.service.js");
+
+        expect(await findCompanyForWidget("acme", "chave-errada")).toBeNull();
+      });
+
+      it("retorna null quando o slug nao existe no banco", async () => {
+        companyFindUniqueMock.mockResolvedValue(null);
+        const { findCompanyForWidget } = await import("../src/services/company.service.js");
+
+        expect(await findCompanyForWidget("nao-existe", "qualquer-chave")).toBeNull();
+      });
+    });
+  });
+
+  describe("generateApiKey / verifyApiKey", () => {
+    it("gera chaves com o prefixo wk_ e valores diferentes a cada chamada", async () => {
+      const { generateApiKey } = await import("../src/services/company.service.js");
+      const a = generateApiKey();
+      const b = generateApiKey();
+      expect(a).toMatch(/^wk_/);
+      expect(b).toMatch(/^wk_/);
+      expect(a).not.toBe(b);
+    });
+
+    it("verifyApiKey confere hash e chave corretamente", async () => {
+      const { generateApiKey, verifyApiKey } = await import("../src/services/company.service.js");
+      const { createHash } = await import("node:crypto");
+      const key = generateApiKey();
+      const hash = createHash("sha256").update(key).digest("hex");
+
+      expect(verifyApiKey(hash, key)).toBe(true);
+      expect(verifyApiKey(hash, "outra-chave")).toBe(false);
+      expect(verifyApiKey(null, key)).toBe(false);
+      expect(verifyApiKey(hash, undefined)).toBe(false);
     });
   });
 
@@ -281,7 +370,7 @@ describe("company.service", () => {
   });
 
   describe("createCompany", () => {
-    it("cria a empresa via Prisma e retorna no formato Company", async () => {
+    it("cria a empresa via Prisma, gera uma chave e devolve o par company+apiKey", async () => {
       companyCreateMock.mockResolvedValue({
         id: "1",
         slug: "nova",
@@ -295,9 +384,16 @@ describe("company.service", () => {
       const result = await createCompany({ slug: "nova", name: "Nova", persona: "p", primaryColor: "#112233" });
 
       expect(companyCreateMock).toHaveBeenCalledWith({
-        data: { slug: "nova", name: "Nova", persona: "p", primaryColor: "#112233", logoUrl: undefined },
+        data: {
+          slug: "nova",
+          name: "Nova",
+          persona: "p",
+          primaryColor: "#112233",
+          logoUrl: undefined,
+          apiKeyHash: expect.any(String),
+        },
       });
-      expect(result).toEqual({
+      expect(result.company).toEqual({
         id: "1",
         slug: "nova",
         name: "Nova",
@@ -305,6 +401,30 @@ describe("company.service", () => {
         primaryColor: "#112233",
         logoUrl: undefined,
       });
+      expect(result.apiKey).toMatch(/^wk_/);
+    });
+  });
+
+  describe("rotateApiKey", () => {
+    it("gera uma nova chave, atualiza o hash via Prisma e devolve o par company+apiKey", async () => {
+      companyUpdateMock.mockResolvedValue({
+        id: "1",
+        slug: "nova",
+        name: "Nova",
+        persona: "p",
+        primaryColor: "#112233",
+        logoUrl: null,
+      });
+      const { rotateApiKey } = await import("../src/services/company.service.js");
+
+      const result = await rotateApiKey("nova");
+
+      expect(companyUpdateMock).toHaveBeenCalledWith({
+        where: { slug: "nova" },
+        data: { apiKeyHash: expect.any(String) },
+      });
+      expect(result.company.slug).toBe("nova");
+      expect(result.apiKey).toMatch(/^wk_/);
     });
   });
 
