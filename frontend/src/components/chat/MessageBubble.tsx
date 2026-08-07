@@ -10,8 +10,8 @@ export function MessageBubble({ message, accentColor }: MessageBubbleProps) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
-          isUser ? "bg-slate-800 text-white" : "border-l-4 bg-slate-100 text-slate-900"
+        className={`min-w-0 max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
+          isUser ? "bg-slate-800 text-white" : "border-l-4 bg-slate-200 text-slate-900"
         }`}
         style={isUser ? undefined : { borderLeftColor: accentColor }}
       >

@@ -41,7 +41,7 @@ export function ChatPanel({
     >
       <header
         style={{ backgroundColor: primaryColor, color: headerTextColor }}
-        className="flex shrink-0 items-center justify-between px-4 py-3"
+        className="flex shrink-0 items-center justify-between px-4 py-3 border-b-2 border-gray-100"
       >
         {logoUrl ? (
           // next/image exigiria configurar remotePatterns pra dominios de logo que
