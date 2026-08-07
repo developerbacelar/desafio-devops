@@ -95,6 +95,13 @@ describe("buildGuardrails", () => {
     const text = buildGuardrails(company);
     expect(text).toMatch(/cumprimente.*apenas na primeira mensagem/i);
   });
+
+  it("pede objetividade sem enrolacao mas exige responder a pergunta por completo", () => {
+    const text = buildGuardrails(company);
+    expect(text).toMatch(/sem enrola[cç][aã]o/i);
+    expect(text).toMatch(/complet[ao]/i);
+    expect(text).not.toMatch(/frases curtas/i);
+  });
 });
 
 describe("sanitizeQuestion", () => {

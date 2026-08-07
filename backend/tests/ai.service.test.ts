@@ -61,7 +61,7 @@ describe("ai.service", () => {
       config: {
         systemInstruction: "sys",
         temperature: 0.3,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 1536,
       },
     });
   });
@@ -89,9 +89,54 @@ describe("ai.service", () => {
       config: {
         systemInstruction: "sys",
         temperature: 0.3,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 1536,
       },
     });
+  });
+
+  it("detecta truncamento no Gemini (finishReason MAX_TOKENS) e tenta novamente com mais espaco", async () => {
+    generateContentMock
+      .mockResolvedValueOnce({
+        text: "Resposta cortada pela met",
+        candidates: [{ finishReason: "MAX_TOKENS" }],
+      })
+      .mockResolvedValueOnce({
+        text: "Resposta completa.",
+        candidates: [{ finishReason: "STOP" }],
+      });
+    const { ask } = await import("../src/services/ai.service.js");
+
+    const resultado = await ask({ systemPrompt: "sys", question: "oi" });
+
+    expect(resultado).toBe("Resposta completa.");
+    expect(generateContentMock).toHaveBeenCalledTimes(2);
+    expect(generateContentMock).toHaveBeenNthCalledWith(2, {
+      model: "gemini-flash-latest",
+      contents: [{ role: "user", parts: [{ text: "oi" }] }],
+      config: {
+        systemInstruction: expect.stringContaining("cortada antes de terminar"),
+        temperature: 0.3,
+        maxOutputTokens: 2048,
+      },
+    });
+  });
+
+  it("se a retentativa do Gemini tambem truncar, retorna o texto da retentativa sem uma 3a chamada", async () => {
+    generateContentMock
+      .mockResolvedValueOnce({
+        text: "Primeira tentativa cortada",
+        candidates: [{ finishReason: "MAX_TOKENS" }],
+      })
+      .mockResolvedValueOnce({
+        text: "Segunda tentativa tambem cortada",
+        candidates: [{ finishReason: "MAX_TOKENS" }],
+      });
+    const { ask } = await import("../src/services/ai.service.js");
+
+    const resultado = await ask({ systemPrompt: "sys", question: "oi" });
+
+    expect(resultado).toBe("Segunda tentativa tambem cortada");
+    expect(generateContentMock).toHaveBeenCalledTimes(2);
   });
 
   it("lanca erro quando a IA retorna resposta vazia e o Groq nao esta configurado", async () => {
@@ -125,7 +170,7 @@ describe("ai.service", () => {
         { role: "user", content: "oi" },
       ],
       temperature: 0.3,
-      max_tokens: 1024,
+      max_tokens: 1536,
     });
   });
 
@@ -153,8 +198,53 @@ describe("ai.service", () => {
         { role: "user", content: "e agora?" },
       ],
       temperature: 0.3,
-      max_tokens: 1024,
+      max_tokens: 1536,
     });
+  });
+
+  it("detecta truncamento no Groq (finish_reason length) e tenta novamente com mais espaco", async () => {
+    mockEnv.groqApiKey = "chave-groq";
+    generateContentMock.mockRejectedValue(new Error("Gemini indisponivel"));
+    groqCreateMock
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: "Cortada" }, finish_reason: "length" }],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: "Completa." }, finish_reason: "stop" }],
+      });
+
+    const { ask } = await import("../src/services/ai.service.js");
+    const resultado = await ask({ systemPrompt: "sys", question: "oi" });
+
+    expect(resultado).toBe("Completa.");
+    expect(groqCreateMock).toHaveBeenCalledTimes(2);
+    expect(groqCreateMock).toHaveBeenNthCalledWith(2, {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: expect.stringContaining("cortada antes de terminar") },
+        { role: "user", content: "oi" },
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    });
+  });
+
+  it("se a retentativa do Groq tambem truncar, retorna o texto da retentativa sem uma 3a chamada", async () => {
+    mockEnv.groqApiKey = "chave-groq";
+    generateContentMock.mockRejectedValue(new Error("Gemini indisponivel"));
+    groqCreateMock
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: "Cortada 1" }, finish_reason: "length" }],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: "Cortada 2" }, finish_reason: "length" }],
+      });
+
+    const { ask } = await import("../src/services/ai.service.js");
+    const resultado = await ask({ systemPrompt: "sys", question: "oi" });
+
+    expect(resultado).toBe("Cortada 2");
+    expect(groqCreateMock).toHaveBeenCalledTimes(2);
   });
 
   it("propaga o erro do Gemini quando GROQ_API_KEY nao esta configurada", async () => {

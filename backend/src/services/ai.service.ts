@@ -52,6 +52,13 @@ function toGroqMessages(
   return messages;
 }
 
+const DEFAULT_MAX_OUTPUT_TOKENS = 1536;
+const RETRY_MAX_OUTPUT_TOKENS = 2048;
+const TRUNCATION_RETRY_INSTRUCTION =
+  "\n\nSua resposta anterior foi cortada antes de terminar. Responda novamente do zero, " +
+  "de forma direta e sem enrolacao, mas garanta que a resposta fique completa e correta " +
+  "- nao deixe de incluir nenhuma informacao necessaria.";
+
 function extractText(text: string | null | undefined): string {
   const trimmed = text?.trim();
   if (!trimmed) {
@@ -61,28 +68,58 @@ function extractText(text: string | null | undefined): string {
 }
 
 async function askGemini({ systemPrompt, question, history = [] }: AskParams): Promise<string> {
-  const response = await getGeminiClient().models.generateContent({
+  const client = getGeminiClient();
+  const contents = toGeminiContents(history, question);
+
+  const first = await client.models.generateContent({
     model: env.geminiModel,
-    contents: toGeminiContents(history, question),
+    contents,
     config: {
       systemInstruction: systemPrompt,
       temperature: 0.3,
-      maxOutputTokens: 1024,
+      maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
     },
   });
 
-  return extractText(response.text);
+  if (first.candidates?.[0]?.finishReason !== "MAX_TOKENS") {
+    return extractText(first.text);
+  }
+
+  const retry = await client.models.generateContent({
+    model: env.geminiModel,
+    contents,
+    config: {
+      systemInstruction: systemPrompt + TRUNCATION_RETRY_INSTRUCTION,
+      temperature: 0.3,
+      maxOutputTokens: RETRY_MAX_OUTPUT_TOKENS,
+    },
+  });
+
+  return extractText(retry.text);
 }
 
 async function askGroq({ systemPrompt, question, history = [] }: AskParams): Promise<string> {
-  const response = await getGroqClient().chat.completions.create({
+  const client = getGroqClient();
+
+  const first = await client.chat.completions.create({
     model: env.groqModel,
     messages: toGroqMessages(systemPrompt, history, question),
     temperature: 0.3,
-    max_tokens: 1024,
+    max_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
   });
 
-  return extractText(response.choices[0]?.message?.content);
+  if (first.choices[0]?.finish_reason !== "length") {
+    return extractText(first.choices[0]?.message?.content);
+  }
+
+  const retry = await client.chat.completions.create({
+    model: env.groqModel,
+    messages: toGroqMessages(systemPrompt + TRUNCATION_RETRY_INSTRUCTION, history, question),
+    temperature: 0.3,
+    max_tokens: RETRY_MAX_OUTPUT_TOKENS,
+  });
+
+  return extractText(retry.choices[0]?.message?.content);
 }
 
 export async function ask(params: AskParams): Promise<string> {

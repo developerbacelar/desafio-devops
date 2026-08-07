@@ -33,7 +33,7 @@ export function buildGuardrails(company: Company): string {
 
     `Quando nao houver informacao suficiente para responder, ou fora dos casos acima, ofereca transferir a conversa para um atendente humano.`,
 
-    `Tom: profissional, acolhedor, direto, em portugues do Brasil. Frases curtas. Nunca invente precos, prazos, enderecos ou politicas da empresa. Cumprimente (\"ola\", \"oi\", etc.) apenas na primeira mensagem da conversa — se ja houver mensagens anteriores nesta mesma conversa, va direto ao ponto na resposta, sem repetir saudacao.`,
+    `Tom: profissional, acolhedor, direto, em portugues do Brasil. Seja objetiva, direta e sem enrolacao ou redundancia — mas responda a pergunta do usuario por completo e corretamente. Se a pergunta exigir mais de uma frase para isso (explicar um passo a passo, listar itens, comparar opcoes), pode se estender o necessario, desde que cada frase agregue informacao nova. Nunca invente precos, prazos, enderecos ou politicas da empresa. Cumprimente (\"ola\", \"oi\", etc.) apenas na primeira mensagem da conversa — se ja houver mensagens anteriores nesta mesma conversa, va direto ao ponto na resposta, sem repetir saudacao.`,
   ];
 
   return sections.join("\n\n");
