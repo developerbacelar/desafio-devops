@@ -2,20 +2,23 @@ import type { WidgetResizeMessage } from "@/hooks/usePostMessageBridge";
 
 export interface WidgetConfig {
   companySlug: string;
+  apiKey: string;
   embedOrigin: string;
   embedUrl: string;
 }
 
-/** Le a config do proprio <script> (data-company) e deriva a origem/URL do embed a partir do seu src. */
+/** Le a config do proprio <script> (data-company, data-key) e deriva a origem/URL do embed a partir do seu src. */
 export function parseConfig(scriptEl: HTMLScriptElement): WidgetConfig | null {
   const companySlug = scriptEl.getAttribute("data-company");
-  if (!companySlug) {
+  const apiKey = scriptEl.getAttribute("data-key");
+  if (!companySlug || !apiKey) {
     return null;
   }
   try {
     const url = new URL(scriptEl.src);
     return {
       companySlug,
+      apiKey,
       embedOrigin: url.origin,
       embedUrl: `${url.origin}/embed/${companySlug}`,
     };
@@ -35,6 +38,30 @@ export function isTrustedMessage(
     event.data !== null &&
     event.data.source === "chatbot-widget" &&
     event.data.type === "resize"
+  );
+}
+
+export interface WidgetReadyMessage {
+  source: "chatbot-widget";
+  type: "ready";
+}
+
+/**
+ * Valida a mensagem que o iframe manda pro script pai assim que carrega,
+ * pedindo a chave de API (entregue via postMessage, nunca na URL do iframe,
+ * pra nao vazar em Referer de recursos de terceiros que a pagina hospedeira
+ * carregue).
+ */
+export function isReadyMessage(
+  event: MessageEvent,
+  expectedOrigin: string,
+): event is MessageEvent<WidgetReadyMessage> {
+  return (
+    event.origin === expectedOrigin &&
+    typeof event.data === "object" &&
+    event.data !== null &&
+    event.data.source === "chatbot-widget" &&
+    event.data.type === "ready"
   );
 }
 

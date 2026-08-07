@@ -1,8 +1,4 @@
-// Bootstrap do widget: efeito colateral no DOM do site hospedeiro.
-// Nao tem teste unitario proprio (glue code) - a logica pura que ele usa
-// (parseConfig/isTrustedMessage/computeIframeCss) esta em ./logic.ts e e
-// testada la. Verificacao manual via public/demo.html.
-import { computeIframeCss, isTrustedMessage, parseConfig } from "./logic";
+import { computeIframeCss, isReadyMessage, isTrustedMessage, parseConfig } from "./logic";
 
 declare global {
   interface Window {
@@ -59,6 +55,16 @@ function mount() {
   });
 
   window.addEventListener("message", (event) => {
+    if (isReadyMessage(event, config.embedOrigin)) {
+      // Entrega a chave via postMessage (targetOrigin explicito, nao "*"):
+      // aqui o dado e sensivel, diferente do sentido iframe->pai (so estado de UI).
+      iframe.contentWindow?.postMessage(
+        { source: "chatbot-widget", type: "init", key: config.apiKey },
+        config.embedOrigin,
+      );
+      return;
+    }
+
     if (!isTrustedMessage(event, config.embedOrigin)) return;
     // window aqui e o da pagina hospedeira (widget.js roda no contexto pai) -
     // e por isso que a decisao de fullscreen tem que ser tomada aqui, nunca

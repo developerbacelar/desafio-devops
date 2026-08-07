@@ -1,25 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { computeIframeCss, isTrustedMessage, parseConfig } from "@/widget/logic";
+import { computeIframeCss, isReadyMessage, isTrustedMessage, parseConfig } from "@/widget/logic";
 
-function makeScript(attrs: { src?: string; dataCompany?: string }): HTMLScriptElement {
+function makeScript(attrs: { src?: string; dataCompany?: string; dataKey?: string }): HTMLScriptElement {
   const el = document.createElement("script");
   if (attrs.src) el.src = attrs.src;
   if (attrs.dataCompany) el.setAttribute("data-company", attrs.dataCompany);
+  if (attrs.dataKey) el.setAttribute("data-key", attrs.dataKey);
   return el;
 }
 
 describe("parseConfig", () => {
-  it("le data-company e deriva a origem/URL do embed a partir do src do script", () => {
-    const script = makeScript({ src: "https://chat.example.com/widget.js", dataCompany: "technova" });
+  it("le data-company e data-key e deriva a origem/URL do embed a partir do src do script", () => {
+    const script = makeScript({
+      src: "https://chat.example.com/widget.js",
+      dataCompany: "technova",
+      dataKey: "wk_abc123",
+    });
     expect(parseConfig(script)).toEqual({
       companySlug: "technova",
+      apiKey: "wk_abc123",
       embedOrigin: "https://chat.example.com",
       embedUrl: "https://chat.example.com/embed/technova",
     });
   });
 
   it("retorna null quando data-company esta ausente", () => {
-    const script = makeScript({ src: "https://chat.example.com/widget.js" });
+    const script = makeScript({ src: "https://chat.example.com/widget.js", dataKey: "wk_abc123" });
+    expect(parseConfig(script)).toBeNull();
+  });
+
+  it("retorna null quando data-key esta ausente", () => {
+    const script = makeScript({ src: "https://chat.example.com/widget.js", dataCompany: "technova" });
     expect(parseConfig(script)).toBeNull();
   });
 });
@@ -48,6 +59,33 @@ describe("isTrustedMessage", () => {
   it("retorna false quando data nao e um objeto", () => {
     const event = new MessageEvent("message", { origin: "https://chat.example.com", data: "nao e objeto" });
     expect(isTrustedMessage(event, "https://chat.example.com")).toBe(false);
+  });
+});
+
+describe("isReadyMessage", () => {
+  const validMessage = { source: "chatbot-widget", type: "ready" };
+
+  it("retorna true quando origem e formato batem", () => {
+    const event = new MessageEvent("message", { origin: "https://chat.example.com", data: validMessage });
+    expect(isReadyMessage(event, "https://chat.example.com")).toBe(true);
+  });
+
+  it("retorna false quando a origem nao bate", () => {
+    const event = new MessageEvent("message", { origin: "https://outro-site.com", data: validMessage });
+    expect(isReadyMessage(event, "https://chat.example.com")).toBe(false);
+  });
+
+  it("retorna false quando o type nao e ready", () => {
+    const event = new MessageEvent("message", {
+      origin: "https://chat.example.com",
+      data: { source: "chatbot-widget", type: "resize" },
+    });
+    expect(isReadyMessage(event, "https://chat.example.com")).toBe(false);
+  });
+
+  it("retorna false quando data nao e um objeto", () => {
+    const event = new MessageEvent("message", { origin: "https://chat.example.com", data: "nao e objeto" });
+    expect(isReadyMessage(event, "https://chat.example.com")).toBe(false);
   });
 });
 

@@ -1,13 +1,14 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchCompanies } from "@/lib/api";
+import { fetchCompany } from "@/lib/api";
 import { useChatSession } from "@/hooks/useChatSession";
 import { usePostMessageBridge } from "@/hooks/usePostMessageBridge";
+import { useWidgetKey } from "@/hooks/useWidgetKey";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 
 vi.mock("@/lib/api", () => ({
-  fetchCompanies: vi.fn(),
+  fetchCompany: vi.fn(),
 }));
 vi.mock("@/hooks/useChatSession", () => ({
   useChatSession: vi.fn(),
@@ -15,7 +16,11 @@ vi.mock("@/hooks/useChatSession", () => ({
 vi.mock("@/hooks/usePostMessageBridge", () => ({
   usePostMessageBridge: vi.fn(),
 }));
+vi.mock("@/hooks/useWidgetKey", () => ({
+  useWidgetKey: vi.fn(),
+}));
 
+const TEST_API_KEY = "wk_test_key";
 const company = { slug: "technova", name: "TechNova Eletronicos", primaryColor: "#2563eb" };
 
 function mockSession(overrides: Partial<ReturnType<typeof useChatSession>> = {}) {
@@ -31,12 +36,28 @@ function mockSession(overrides: Partial<ReturnType<typeof useChatSession>> = {})
 }
 
 beforeEach(() => {
-  vi.mocked(fetchCompanies).mockResolvedValue([company]);
+  vi.mocked(fetchCompany).mockResolvedValue(company);
   vi.mocked(usePostMessageBridge).mockReturnValue({ notifyResize: vi.fn() });
+  vi.mocked(useWidgetKey).mockReturnValue(TEST_API_KEY);
   mockSession();
 });
 
 describe("ChatWidget", () => {
+  it("so busca a empresa depois que a chave chega (handshake com o iframe host)", async () => {
+    vi.mocked(useWidgetKey).mockReturnValue(null);
+    const { container } = render(<ChatWidget companySlug="technova" />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(fetchCompany).not.toHaveBeenCalled();
+  });
+
+  it("busca a empresa com fetchCompany(slug, apiKey) assim que a chave chega", async () => {
+    render(<ChatWidget companySlug="technova" />);
+
+    await screen.findByRole("button", { name: /abrir chat/i });
+    expect(fetchCompany).toHaveBeenCalledWith("technova", TEST_API_KEY);
+  });
+
   it("avisa o notifyResize com o tamanho do launcher (fechado) e do painel menor (aberto), sem decidir fullscreen aqui", async () => {
     const notifyResize = vi.fn();
     vi.mocked(usePostMessageBridge).mockReturnValue({ notifyResize });
@@ -62,12 +83,21 @@ describe("ChatWidget", () => {
   });
 
   it("com logoUrl, mostra a logo (svg) no lugar do nome no cabecalho e no launcher", async () => {
-    vi.mocked(fetchCompanies).mockResolvedValue([{ ...company, logoUrl: "/logos/technova.svg" }]);
+    vi.mocked(fetchCompany).mockResolvedValue({ ...company, logoUrl: "/logos/technova.svg" });
     const user = userEvent.setup();
     render(<ChatWidget companySlug="technova" />);
 
     const launcherLogo = await screen.findByRole("img", { name: /technova eletronicos/i });
     expect(launcherLogo).toHaveAttribute("src", "/logos/technova.svg");
+
+    // O botao do launcher deve ter tamanho fixo (72px), nao h-full/w-full: o
+    // iframe host anima o proprio tamanho ao abrir/fechar, e um launcher que
+    // preenche 100% do box acompanharia essa animacao (logo "incha" e encolhe).
+    const launcherButton = screen.getByRole("button", { name: /abrir chat/i });
+    expect(launcherButton.className).toMatch(/h-\[72px\]/);
+    expect(launcherButton.className).toMatch(/w-\[72px\]/);
+    expect(launcherButton.className).not.toMatch(/h-full/);
+    expect(launcherButton.className).not.toMatch(/w-full/);
 
     await user.click(screen.getByRole("button", { name: /abrir chat/i }));
 
@@ -88,12 +118,12 @@ describe("ChatWidget", () => {
     expect(await screen.findByRole("dialog", { name: /technova/i })).toBeInTheDocument();
   });
 
-  it("nao renderiza nada quando a empresa nao e encontrada", async () => {
-    vi.mocked(fetchCompanies).mockResolvedValue([]);
+  it("nao renderiza nada quando a empresa nao e encontrada (chave invalida ou slug inexistente)", async () => {
+    vi.mocked(fetchCompany).mockRejectedValue(new Error("Nao foi possivel carregar a empresa."));
     const { container } = render(<ChatWidget companySlug="empresa-fantasma" />);
 
-    await waitFor(() => expect(fetchCompanies).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
+    await waitFor(() => expect(fetchCompany).toHaveBeenCalled());
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
   it("desabilita o composer e mostra o indicador de digitando durante o envio", async () => {

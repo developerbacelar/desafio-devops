@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { fetchCompanies } from "@/lib/api";
+import { fetchCompany } from "@/lib/api";
 import { useChatSession } from "@/hooks/useChatSession";
 import { usePostMessageBridge } from "@/hooks/usePostMessageBridge";
+import { useWidgetKey } from "@/hooks/useWidgetKey";
 import type { Company } from "@/lib/types";
 import { Launcher } from "./Launcher";
 import { ChatPanel } from "./ChatPanel";
@@ -18,9 +19,10 @@ export interface ChatWidgetProps {
 }
 
 export function ChatWidget({ companySlug }: ChatWidgetProps) {
+  const apiKey = useWidgetKey();
   const [company, setCompany] = useState<Company | null | undefined>(undefined);
   const [open, setOpen] = useState(false);
-  const { messages, status, error, sendMessage, retry, reset } = useChatSession(companySlug);
+  const { messages, status, error, sendMessage, retry, reset } = useChatSession(companySlug, apiKey ?? "");
   const { notifyResize } = usePostMessageBridge();
   const launcherRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -28,11 +30,13 @@ export function ChatWidget({ companySlug }: ChatWidgetProps) {
   const isFirstFocusPass = useRef(true);
 
   useEffect(() => {
+    // So busca a empresa depois que a chave chegar do handshake com o script
+    // pai (ver useWidgetKey): sem ela, /api/companies/:slug so responde 403.
+    if (!apiKey) return;
     let active = true;
-    fetchCompanies()
-      .then((companies) => {
-        if (!active) return;
-        setCompany(companies.find((c) => c.slug === companySlug) ?? null);
+    fetchCompany(companySlug, apiKey)
+      .then((c) => {
+        if (active) setCompany(c);
       })
       .catch(() => {
         if (active) setCompany(null);
@@ -40,7 +44,7 @@ export function ChatWidget({ companySlug }: ChatWidgetProps) {
     return () => {
       active = false;
     };
-  }, [companySlug]);
+  }, [companySlug, apiKey]);
 
   useEffect(() => {
     // So o tamanho "preferido" quando aberto (floating) e enviado aqui. Se o

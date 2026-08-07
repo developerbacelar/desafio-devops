@@ -83,7 +83,7 @@ export interface UseChatSessionResult {
   reset: () => void;
 }
 
-export function useChatSession(companySlug: string): UseChatSessionResult {
+export function useChatSession(companySlug: string, apiKey: string): UseChatSessionResult {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const sendMessage = useCallback(
@@ -91,13 +91,13 @@ export function useChatSession(companySlug: string): UseChatSessionResult {
       const history = toHistory(state.messages);
       dispatch({ type: "send-start", message: makeMessage("user", question) });
       try {
-        const { answer } = await sendChatMessage({ companySlug, question, history });
+        const { answer } = await sendChatMessage({ companySlug, question, history }, apiKey);
         dispatch({ type: "send-success", message: makeMessage("assistant", answer) });
       } catch (err) {
         dispatch({ type: "send-error", error: (err as Error).message, question, history });
       }
     },
-    [companySlug, state.messages],
+    [companySlug, apiKey, state.messages],
   );
 
   const retry = useCallback(async () => {
@@ -105,12 +105,12 @@ export function useChatSession(companySlug: string): UseChatSessionResult {
     const { question, history } = state.pendingRetry;
     dispatch({ type: "retry-start" });
     try {
-      const { answer } = await sendChatMessage({ companySlug, question, history });
+      const { answer } = await sendChatMessage({ companySlug, question, history }, apiKey);
       dispatch({ type: "send-success", message: makeMessage("assistant", answer) });
     } catch (err) {
       dispatch({ type: "send-error", error: (err as Error).message, question, history });
     }
-  }, [companySlug, state.pendingRetry]);
+  }, [companySlug, apiKey, state.pendingRetry]);
 
   const reset = useCallback(() => dispatch({ type: "reset" }), []);
 

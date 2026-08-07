@@ -7,13 +7,15 @@ vi.mock("@/lib/api", () => ({
   sendChatMessage: vi.fn(),
 }));
 
+const TEST_API_KEY = "wk_test_key";
+
 describe("useChatSession", () => {
   beforeEach(() => {
     vi.mocked(sendChatMessage).mockReset();
   });
 
   it("comeca em estado idle sem mensagens", () => {
-    const { result } = renderHook(() => useChatSession("technova"));
+    const { result } = renderHook(() => useChatSession("technova", TEST_API_KEY));
     expect(result.current.messages).toEqual([]);
     expect(result.current.status).toBe("idle");
     expect(result.current.error).toBeNull();
@@ -26,7 +28,7 @@ describe("useChatSession", () => {
       answer: "5 dias uteis.",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    const { result } = renderHook(() => useChatSession("technova"));
+    const { result } = renderHook(() => useChatSession("technova", TEST_API_KEY));
 
     await act(async () => {
       await result.current.sendMessage("Qual o prazo?");
@@ -53,7 +55,7 @@ describe("useChatSession", () => {
         answer: "Sim, acima de R$ 200.",
         createdAt: "2026-01-01T00:00:01.000Z",
       });
-    const { result } = renderHook(() => useChatSession("technova"));
+    const { result } = renderHook(() => useChatSession("technova", TEST_API_KEY));
 
     await act(async () => {
       await result.current.sendMessage("Qual o prazo?");
@@ -62,24 +64,32 @@ describe("useChatSession", () => {
       await result.current.sendMessage("E frete gratis?");
     });
 
-    expect(sendChatMessage).toHaveBeenNthCalledWith(1, {
-      companySlug: "technova",
-      question: "Qual o prazo?",
-      history: [],
-    });
-    expect(sendChatMessage).toHaveBeenNthCalledWith(2, {
-      companySlug: "technova",
-      question: "E frete gratis?",
-      history: [
-        { role: "user", content: "Qual o prazo?" },
-        { role: "assistant", content: "5 dias uteis." },
-      ],
-    });
+    expect(sendChatMessage).toHaveBeenNthCalledWith(
+      1,
+      {
+        companySlug: "technova",
+        question: "Qual o prazo?",
+        history: [],
+      },
+      TEST_API_KEY,
+    );
+    expect(sendChatMessage).toHaveBeenNthCalledWith(
+      2,
+      {
+        companySlug: "technova",
+        question: "E frete gratis?",
+        history: [
+          { role: "user", content: "Qual o prazo?" },
+          { role: "assistant", content: "5 dias uteis." },
+        ],
+      },
+      TEST_API_KEY,
+    );
   });
 
   it("em caso de erro mantem a mensagem do usuario e entra em status error", async () => {
     vi.mocked(sendChatMessage).mockRejectedValue(new Error("Falha ao enviar a mensagem."));
-    const { result } = renderHook(() => useChatSession("technova"));
+    const { result } = renderHook(() => useChatSession("technova", TEST_API_KEY));
 
     await act(async () => {
       await result.current.sendMessage("Qual o prazo?");
@@ -99,7 +109,7 @@ describe("useChatSession", () => {
         answer: "5 dias uteis.",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
-    const { result } = renderHook(() => useChatSession("technova"));
+    const { result } = renderHook(() => useChatSession("technova", TEST_API_KEY));
 
     await act(async () => {
       await result.current.sendMessage("Qual o prazo?");
@@ -114,11 +124,15 @@ describe("useChatSession", () => {
     ]);
     expect(result.current.status).toBe("idle");
     expect(sendChatMessage).toHaveBeenCalledTimes(2);
-    expect(sendChatMessage).toHaveBeenNthCalledWith(2, {
-      companySlug: "technova",
-      question: "Qual o prazo?",
-      history: [],
-    });
+    expect(sendChatMessage).toHaveBeenNthCalledWith(
+      2,
+      {
+        companySlug: "technova",
+        question: "Qual o prazo?",
+        history: [],
+      },
+      TEST_API_KEY,
+    );
   });
 
   it("reset() volta ao estado inicial", async () => {
@@ -128,7 +142,7 @@ describe("useChatSession", () => {
       answer: "5 dias uteis.",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    const { result } = renderHook(() => useChatSession("technova"));
+    const { result } = renderHook(() => useChatSession("technova", TEST_API_KEY));
 
     await act(async () => {
       await result.current.sendMessage("Qual o prazo?");

@@ -20,13 +20,16 @@ describe("NewCompanyPage", () => {
     vi.mocked(useRouter).mockReturnValue({ push, replace: vi.fn() } as unknown as ReturnType<typeof useRouter>);
   });
 
-  it("envia o formulario preenchido para createCompany e navega para /admin", async () => {
+  it("envia o formulario preenchido, mostra a chave gerada e so navega apos confirmar", async () => {
     vi.mocked(createCompany).mockResolvedValue({
-      id: "1",
-      slug: "nova-empresa",
-      name: "Nova Empresa",
-      persona: "Persona da empresa",
-      primaryColor: "#2563eb",
+      company: {
+        id: "1",
+        slug: "nova-empresa",
+        name: "Nova Empresa",
+        persona: "Persona da empresa",
+        primaryColor: "#2563eb",
+      },
+      apiKey: "wk_chave_gerada",
     });
     const user = userEvent.setup();
     render(<NewCompanyPage />);
@@ -44,6 +47,10 @@ describe("NewCompanyPage", () => {
       primaryColor: "#2563eb",
       logoUrl: undefined,
     });
+    expect(await screen.findByText("wk_chave_gerada")).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /continuar/i }));
     expect(push).toHaveBeenCalledWith("/admin");
   });
 });

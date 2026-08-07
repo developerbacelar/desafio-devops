@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CompanyForm, type CompanyFormValues } from "@/components/admin/CompanyForm";
 import { DocumentManager } from "@/components/admin/DocumentManager";
+import { ApiKeyReveal } from "@/components/admin/ApiKeyReveal";
 import { ConfirmDeleteDialog } from "@/components/admin/ui/ConfirmDeleteDialog";
 import { Button } from "@/components/admin/ui/Button";
-import { deleteCompany, fetchAdminCompany, updateCompany } from "@/lib/adminApi";
+import { deleteCompany, fetchAdminCompany, rotateApiKey, updateCompany } from "@/lib/adminApi";
 
 export default function EditCompanyPage() {
   const params = useParams<{ slug: string }>();
@@ -15,6 +16,9 @@ export default function EditCompanyPage() {
   const [initialValues, setInitialValues] = useState<CompanyFormValues | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [rotateError, setRotateError] = useState<string | null>(null);
+  const [rotating, setRotating] = useState(false);
 
   useEffect(() => {
     fetchAdminCompany(slug)
@@ -45,6 +49,19 @@ export default function EditCompanyPage() {
     router.replace("/admin");
   }
 
+  async function handleRotateApiKey() {
+    setRotateError(null);
+    setRotating(true);
+    try {
+      const result = await rotateApiKey(slug);
+      setNewApiKey(result.apiKey);
+    } catch (err) {
+      setRotateError(err instanceof Error ? err.message : "Falha ao gerar uma nova chave.");
+    } finally {
+      setRotating(false);
+    }
+  }
+
   if (loadError) {
     return (
       <p role="alert" className="text-sm text-red-600">
@@ -64,6 +81,33 @@ export default function EditCompanyPage() {
         <CompanyForm mode="edit" initialValues={initialValues} submitLabel="Salvar" onSubmit={handleSubmit} />
       </div>
       <DocumentManager companySlug={slug} />
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Chave de API do widget</h2>
+        <p className="text-sm text-slate-700">
+          Gerar uma nova chave invalida a chave atual imediatamente — o widget instalado no site
+          desta empresa para de funcionar até o <code>data-key</code> do script ser atualizado.
+        </p>
+        {newApiKey ? (
+          <ApiKeyReveal apiKey={newApiKey} onDismiss={() => setNewApiKey(null)} dismissLabel="Fechar" />
+        ) : (
+          <>
+            {rotateError ? (
+              <p role="alert" className="text-sm text-red-600">
+                {rotateError}
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-fit"
+              disabled={rotating}
+              onClick={handleRotateApiKey}
+            >
+              {rotating ? "Gerando..." : "Gerar nova chave"}
+            </Button>
+          </>
+        )}
+      </div>
       <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
         <h2 className="text-sm font-semibold text-red-900">Zona de risco</h2>
         <p className="text-sm text-red-700">

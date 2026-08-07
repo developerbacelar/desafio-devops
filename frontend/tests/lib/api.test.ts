@@ -11,31 +11,33 @@ describe("lib/api", () => {
     vi.unstubAllEnvs();
   });
 
-  describe("fetchCompanies", () => {
-    it("busca /api/companies e retorna a lista de empresas", async () => {
+  describe("fetchCompany", () => {
+    it("busca /api/companies/:slug com o header X-Widget-Key e retorna a empresa", async () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ companies: [{ slug: "technova", name: "TechNova", primaryColor: "#2563eb" }] }),
+        json: async () => ({ company: { slug: "technova", name: "TechNova", primaryColor: "#2563eb" } }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      const { fetchCompanies } = await import("@/lib/api");
-      const companies = await fetchCompanies();
+      const { fetchCompany } = await import("@/lib/api");
+      const company = await fetchCompany("technova", "wk_abc123");
 
-      expect(fetchMock).toHaveBeenCalledWith("http://localhost:3333/api/companies");
-      expect(companies).toEqual([{ slug: "technova", name: "TechNova", primaryColor: "#2563eb" }]);
+      expect(fetchMock).toHaveBeenCalledWith("http://localhost:3333/api/companies/technova", {
+        headers: { "X-Widget-Key": "wk_abc123" },
+      });
+      expect(company).toEqual({ slug: "technova", name: "TechNova", primaryColor: "#2563eb" });
     });
 
     it("lanca erro quando a resposta nao e ok", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
 
-      const { fetchCompanies } = await import("@/lib/api");
-      await expect(fetchCompanies()).rejects.toThrow(/empresas/);
+      const { fetchCompany } = await import("@/lib/api");
+      await expect(fetchCompany("technova", "chave-errada")).rejects.toThrow(/empresa/);
     });
   });
 
   describe("sendChatMessage", () => {
-    it("envia POST /api/chat com o payload e retorna a resposta", async () => {
+    it("envia POST /api/chat com o payload, o header X-Widget-Key e retorna a resposta", async () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -48,15 +50,18 @@ describe("lib/api", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       const { sendChatMessage } = await import("@/lib/api");
-      const result = await sendChatMessage({
-        companySlug: "technova",
-        question: "Voces entregam em Curitiba?",
-        history: [],
-      });
+      const result = await sendChatMessage(
+        {
+          companySlug: "technova",
+          question: "Voces entregam em Curitiba?",
+          history: [],
+        },
+        "wk_abc123",
+      );
 
       expect(fetchMock).toHaveBeenCalledWith("http://localhost:3333/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Widget-Key": "wk_abc123" },
         body: JSON.stringify({
           companySlug: "technova",
           question: "Voces entregam em Curitiba?",
@@ -74,7 +79,7 @@ describe("lib/api", () => {
 
       const { sendChatMessage } = await import("@/lib/api");
       await expect(
-        sendChatMessage({ companySlug: "technova", question: "", history: [] }),
+        sendChatMessage({ companySlug: "technova", question: "", history: [] }, "wk_abc123"),
       ).rejects.toThrow("A pergunta nao pode estar vazia.");
     });
 
@@ -91,7 +96,7 @@ describe("lib/api", () => {
 
       const { sendChatMessage } = await import("@/lib/api");
       await expect(
-        sendChatMessage({ companySlug: "technova", question: "Ola", history: [] }),
+        sendChatMessage({ companySlug: "technova", question: "Ola", history: [] }, "wk_abc123"),
       ).rejects.toThrow(/Falha ao enviar/);
     });
   });

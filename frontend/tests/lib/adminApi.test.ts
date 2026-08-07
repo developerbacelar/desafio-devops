@@ -110,23 +110,27 @@ describe("lib/adminApi", () => {
   });
 
   describe("createCompany", () => {
-    it("envia POST com o payload e retorna a empresa criada", async () => {
+    it("envia POST com o payload e retorna a empresa criada junto com a apiKey", async () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         status: 201,
-        json: async () => ({ company: { id: "1", slug: "nova", name: "Nova", persona: "p", primaryColor: "#112233" } }),
+        json: async () => ({
+          company: { id: "1", slug: "nova", name: "Nova", persona: "p", primaryColor: "#112233" },
+          apiKey: "wk_abc123",
+        }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
       const { createCompany } = await import("@/lib/adminApi");
       const input = { slug: "nova", name: "Nova", persona: "p", primaryColor: "#112233" };
-      const company = await createCompany(input);
+      const result = await createCompany(input);
 
       const [url, options] = fetchMock.mock.calls[0];
       expect(url).toBe("http://localhost:3333/api/admin/companies");
       expect(options.method).toBe("POST");
       expect(JSON.parse(options.body as string)).toEqual(input);
-      expect(company.slug).toBe("nova");
+      expect(result.company.slug).toBe("nova");
+      expect(result.apiKey).toBe("wk_abc123");
     });
 
     it("lanca erro 409 do backend quando o slug ja existe", async () => {
@@ -139,6 +143,38 @@ describe("lib/adminApi", () => {
       await expect(
         createCompany({ slug: "repetido", name: "x", persona: "x", primaryColor: "#112233" }),
       ).rejects.toThrow("Slug ja esta em uso.");
+    });
+  });
+
+  describe("rotateApiKey", () => {
+    it("envia POST /rotate-key e retorna a empresa junto com a nova apiKey", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          company: { id: "1", slug: "acme", name: "Acme", persona: "p", primaryColor: "#112233" },
+          apiKey: "wk_nova_chave",
+        }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { rotateApiKey } = await import("@/lib/adminApi");
+      const result = await rotateApiKey("acme");
+
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toBe("http://localhost:3333/api/admin/companies/acme/rotate-key");
+      expect(options.method).toBe("POST");
+      expect(result.apiKey).toBe("wk_nova_chave");
+    });
+
+    it("lanca erro quando a empresa nao existe", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: "Empresa nao encontrada." }) }),
+      );
+
+      const { rotateApiKey } = await import("@/lib/adminApi");
+      await expect(rotateApiKey("fantasma")).rejects.toThrow("Empresa nao encontrada.");
     });
   });
 

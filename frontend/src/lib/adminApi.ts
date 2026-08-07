@@ -89,7 +89,13 @@ export async function fetchAdminCompany(slug: string): Promise<AdminCompany> {
   return body.company;
 }
 
-export async function createCompany(input: CreateCompanyInput): Promise<AdminCompany> {
+export interface CreateCompanyResult {
+  company: AdminCompany;
+  /** Texto puro da chave gerada — so vem nesta resposta, nunca mais. */
+  apiKey: string;
+}
+
+export async function createCompany(input: CreateCompanyInput): Promise<CreateCompanyResult> {
   const res = await adminFetch("/api/admin/companies", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -99,7 +105,17 @@ export async function createCompany(input: CreateCompanyInput): Promise<AdminCom
     throw new Error(await parseErrorMessage(res, "Falha ao criar a empresa."));
   }
   const body = await res.json();
-  return body.company;
+  return { company: body.company, apiKey: body.apiKey };
+}
+
+/** Gera uma nova chave de API pra empresa; a chave antiga para de funcionar na hora. */
+export async function rotateApiKey(slug: string): Promise<CreateCompanyResult> {
+  const res = await adminFetch(`/api/admin/companies/${slug}/rotate-key`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res, "Falha ao gerar uma nova chave."));
+  }
+  const body = await res.json();
+  return { company: body.company, apiKey: body.apiKey };
 }
 
 export async function updateCompany(slug: string, input: UpdateCompanyInput): Promise<AdminCompany> {

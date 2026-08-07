@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useParams, useRouter } from "next/navigation";
-import { deleteCompany, fetchAdminCompany, fetchDocuments, updateCompany } from "@/lib/adminApi";
+import { deleteCompany, fetchAdminCompany, fetchDocuments, rotateApiKey, updateCompany } from "@/lib/adminApi";
 import EditCompanyPage from "@/app/admin/(protected)/companies/[slug]/page";
 
 vi.mock("next/navigation", () => ({
@@ -13,6 +13,7 @@ vi.mock("@/lib/adminApi", () => ({
   fetchAdminCompany: vi.fn(),
   updateCompany: vi.fn(),
   deleteCompany: vi.fn(),
+  rotateApiKey: vi.fn(),
   fetchDocuments: vi.fn(),
   uploadDocument: vi.fn(),
   deleteDocument: vi.fn(),
@@ -165,5 +166,47 @@ describe("EditCompanyPage", () => {
 
     await waitFor(() => expect(deleteCompany).toHaveBeenCalledWith("acme"));
     expect(replace).toHaveBeenCalledWith("/admin");
+  });
+
+  it("gera uma nova chave de API e mostra o aviso de invalidacao imediata", async () => {
+    vi.mocked(fetchAdminCompany).mockResolvedValue({
+      id: "1",
+      slug: "acme",
+      name: "Acme",
+      persona: "Persona da Acme",
+      primaryColor: "#2563eb",
+    });
+    vi.mocked(rotateApiKey).mockResolvedValue({
+      company: { id: "1", slug: "acme", name: "Acme", persona: "Persona da Acme", primaryColor: "#2563eb" },
+      apiKey: "wk_nova_chave",
+    });
+    const user = userEvent.setup();
+    render(<EditCompanyPage />);
+
+    expect(await screen.findByText(/invalida a chave atual imediatamente/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /gerar nova chave/i }));
+
+    expect(rotateApiKey).toHaveBeenCalledWith("acme");
+    expect(await screen.findByText("wk_nova_chave")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /fechar/i }));
+    expect(screen.getByRole("button", { name: /gerar nova chave/i })).toBeInTheDocument();
+  });
+
+  it("mostra erro quando a rotacao de chave falha", async () => {
+    vi.mocked(fetchAdminCompany).mockResolvedValue({
+      id: "1",
+      slug: "acme",
+      name: "Acme",
+      persona: "Persona da Acme",
+      primaryColor: "#2563eb",
+    });
+    vi.mocked(rotateApiKey).mockRejectedValue(new Error("Falha ao gerar uma nova chave."));
+    const user = userEvent.setup();
+    render(<EditCompanyPage />);
+
+    await user.click(await screen.findByRole("button", { name: /gerar nova chave/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Falha ao gerar uma nova chave.");
   });
 });
